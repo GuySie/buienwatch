@@ -1,0 +1,56 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Track a person's rain forecast",
+        "data": {
+          "tracked_entity_id": "Person or device tracker"
+        },
+        "data_description": {
+          "tracked_entity_id": "Buienwatch will follow this entity's current location and forecast rain for it."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This person or device tracker is already being watched."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Buienwatch options",
+        "data": {
+          "poll_interval": "Poll interval"
+        },
+        "data_description": {
+          "poll_interval": "How often to re-fetch Buienradar and Buienalarm for this location."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "bar_graph": {
+        "name": "Forecast"
+      },
+      "current_intensity": {
+        "name": "Current Intensity"
+      },
+      "peak_intensity": {
+        "name": "Peak Intensity"
+      },
+      "minutes_until_start": {
+        "name": "Starts In"
+      },
+      "minutes_until_stop": {
+        "name": "Stops In"
+      },
+      "buienradar_raw": {
+        "name": "Buienradar Raw Data"
+      },
+      "buienalarm_raw": {
+        "name": "Buienalarm Raw Data"
+      }
+    }
+  }
+}
