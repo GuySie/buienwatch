@@ -29,6 +29,16 @@
     }
   },
   "entity": {
+    "select": {
+      "data_source": {
+        "name": "Data Source",
+        "state": {
+          "buienradar": "Buienradar only",
+          "buienalarm": "Buienalarm only",
+          "combined": "Combined (Buienradar + Buienalarm)"
+        }
+      }
+    },
     "sensor": {
       "bar_graph": {
         "name": "Forecast"

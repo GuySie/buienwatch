@@ -8,6 +8,7 @@ MANUFACTURER = "Buienradar / Buienalarm"
 
 CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
 CONF_POLL_INTERVAL = "poll_interval"
+CONF_DATA_SOURCE = "data_source"
 
 DEFAULT_POLL_INTERVAL_MINUTES = 5
 MIN_POLL_INTERVAL_MINUTES = 1
@@ -49,8 +50,12 @@ BAR_THRESHOLDS: tuple[tuple[float, str], ...] = (
 BAR_MAX_CHAR = "▓"
 
 
-class DataSource(StrEnum):
-    """Upstream rain data sources."""
+class DataSourceMode(StrEnum):
+    """Which upstream source(s) to use, selectable from the device page."""
 
     BUIENRADAR = "buienradar"
     BUIENALARM = "buienalarm"
+    COMBINED = "combined"
+
+
+DEFAULT_DATA_SOURCE = DataSourceMode.COMBINED

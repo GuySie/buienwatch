@@ -81,6 +81,7 @@ class BuienwatchBarGraphSensor(BuienwatchEntity, SensorEntity):
         """Return source availability so automations can tell what fed this."""
         data = self.coordinator.data
         return {
+            "data_source_mode": data.data_source_mode.value,
             "buienradar_available": data.buienradar_available,
             "buienalarm_available": data.buienalarm_available,
         }

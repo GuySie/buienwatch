@@ -6,9 +6,9 @@ Buienalarm) into sensors — including a compact text bar graph that's a good
 fit for an Apple Watch Text Image complication.
 
 Add the integration once per person/tracker you want a rain forecast for. On
-every poll it reads that entity's current `latitude`/`longitude`, fetches both
-Buienradar and Buienalarm for that location, and combines them (taking the
-worst-case / highest intensity per time slot when both sources have data).
+every poll it reads that entity's current `latitude`/`longitude`, fetches the
+selected source(s) for that location, and — when using both — combines them
+by taking the worst-case / highest intensity per time slot.
 
 > Buienradar and Buienalarm only cover the Netherlands and Belgium, and both
 > APIs used here are unofficial/reverse-engineered (no API key, no official
@@ -27,6 +27,9 @@ Each configured tracker becomes its own device with:
   when not applicable.
 - Two diagnostic sensors (disabled by default) exposing the raw Buienradar
   and Buienalarm sample series, for building your own templates/automations.
+- **Data Source** — a select entity, right on the device page, to switch
+  between Buienradar only, Buienalarm only, or Combined. Takes effect
+  immediately (no reload), and only the selected source(s) are polled.
 
 ## Installation
 
