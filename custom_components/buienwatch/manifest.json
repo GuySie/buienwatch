@@ -1,11 +1,11 @@
 {
   "domain": "buienwatch",
   "name": "Buienwatch",
-  "version": "0.1.0",
+  "codeowners": ["@guysie"],
   "config_flow": true,
+  "documentation": "https://github.com/guysie/buienwatch",
   "integration_type": "device",
   "iot_class": "cloud_polling",
-  "codeowners": ["@guysie"],
-  "documentation": "https://github.com/guysie/buienwatch",
-  "issue_tracker": "https://github.com/guysie/buienwatch/issues"
+  "issue_tracker": "https://github.com/guysie/buienwatch/issues",
+  "version": "0.1.0"
 }
