@@ -28,10 +28,18 @@ _BUIENRADAR_TZ = ZoneInfo("Europe/Amsterdam")
 
 @dataclass(frozen=True)
 class RainSample:
-    """A single (time, intensity) forecast reading, already in mm/h."""
+    """A single (time, intensity) forecast reading, already in mm/h.
+
+    ``radar_source`` is only ever set by Buienalarm — it's that API's own
+    label for which backing radar composite served the reading (e.g.
+    "radar-nl" inside NL/BE, "radar-westeurope" nearby, "radar-world" as a
+    coarser global fallback further out). Buienradar has no equivalent
+    concept and always leaves this ``None``.
+    """
 
     time: datetime
     mm_per_hour: float
+    radar_source: str | None = None
 
 
 class BuienwatchApiError(Exception):
@@ -131,10 +139,12 @@ async def async_fetch_buienalarm(
 
     try:
         timeseries = payload["data"]
+        radar_source = payload.get("summary", {}).get("source")
         samples = [
             RainSample(
                 time=datetime.fromtimestamp(item["timestamp"], tz=timezone.utc),
                 mm_per_hour=float(item.get("precipitationrate", 0.0)),
+                radar_source=radar_source,
             )
             for item in timeseries
         ]

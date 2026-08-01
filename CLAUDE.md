@@ -92,6 +92,27 @@ exception into `None` (logged) rather than raising, so per-mode dispatch never n
 `None` — which happens either because a single/fallback mode's only available source(s) all failed, or (Combined
 only) both sources failed independently.
 
+## Geographic coverage (spotchecked 2026-08-01, live upstream behavior)
+
+Despite the "Dutch/Belgian" framing above, the two upstream APIs behave very differently outside NL/BE:
+
+- **Buienradar hard-rejects non-NL/BE coordinates.** `gps.buienradar.nl/getrr.php` returns the plain-text body
+  `Not found: location must be inside the Netherlands or Belgium.` for any lat/lon outside NL/BE — confirmed for
+  DE, FR, UK, US, DK, ES, PL, IT, NO, SE, IE, CZ, CH. This already degrades cleanly: no `|` lines parse, so
+  `async_fetch_buienradar()` raises `BuienwatchParseError`, which `_safe_fetch()` turns into `None`.
+- **Buienalarm always returns HTTP 200 everywhere on Earth**, but `imn-rust-lb.infoplaza.io/.../timeseries/` responses
+  carry a `summary.source` field revealing three real backing-data tiers, not a generic fake fallback:
+  - `radar-nl` — NL, BE, and also western Germany near the border (e.g. Cologne, 50.94/6.96)
+  - `radar-westeurope` — wider Western Europe: Berlin, Czechia, Switzerland, Luxembourg, Kiel, Strasbourg
+  - `radar-world` — everywhere else observed: Paris, London, Madrid, Rome, Warsaw, Vienna, Lyon, Budapest,
+    Istanbul, and non-EU spots (New York, Tokyo, Sydney, Nairobi)
+
+  All spotcheck queries returned `precipitationrate: 0.0` (dry at test time), so `radar-world`'s accuracy during
+  actual rain is unverified — it's presumably a coarser satellite-based global estimate versus true radar for the
+  other two tiers. If Buienwatch is ever extended to support trackers outside NL/BE, Buienalarm-only mode already
+  returns numeric data worldwide, but `radar-world` results should be flagged as lower-confidence; Buienradar
+  should keep being skipped there (no code change needed — it already fails gracefully via `_safe_fetch`).
+
 ## Known gaps (see git log / commit messages for context)
 
 - HACS validation (`validate-hacs.yml`) currently fails on the "brands" check — `buienwatch` isn't registered in

@@ -10,9 +10,16 @@ every poll it reads that entity's current `latitude`/`longitude`, fetches the
 selected source(s) for that location, and — when using both — combines them
 by taking the worst-case / highest intensity per time slot.
 
-> Buienradar and Buienalarm only cover the Netherlands and Belgium, and both
-> APIs used here are unofficial/reverse-engineered (no API key, no official
-> documentation) — they may change or break without notice.
+> Both APIs used here are unofficial/reverse-engineered (no API key, no
+> official documentation) — they may change or break without notice.
+> Buienradar only works within the Netherlands and Belgium and returns an
+> error for any other location. Buienalarm will return data anywhere in the
+> world, but its accuracy drops the further you get from the Netherlands/
+> Belgium — it's backed by an actual radar composite there and in a wider
+> Western Europe area (Germany, Switzerland, Czechia, Luxembourg), falling
+> back to a coarser global estimate everywhere else. This integration is
+> built and tested for the Netherlands and Belgium; treat other locations as
+> unsupported.
 
 ## Sensors
 

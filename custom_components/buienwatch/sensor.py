@@ -194,6 +194,9 @@ class BuienwatchRawSensor(BuienwatchEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the raw sample series."""
+        """Return the raw sample series and, for Buienalarm, which radar composite served it."""
         samples: list[RainSample] | None = getattr(self.coordinator.data, self._samples_attr)
-        return {"samples": _serialize_samples(samples)}
+        return {
+            "samples": _serialize_samples(samples),
+            "radar_source": samples[0].radar_source if samples else None,
+        }
