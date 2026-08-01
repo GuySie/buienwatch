@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -26,6 +27,10 @@ from .const import (
 from .helpers import combine_samples, build_bar_graph, compute_gauges
 
 _LOGGER = logging.getLogger(__name__)
+
+# A fetch function's signature is async_fetch_buienradar/async_fetch_buienalarm's:
+# (session, lat, lon) -> list[RainSample].
+_FetchFn = Callable[..., Awaitable[list[RainSample]]]
 
 
 @dataclass
@@ -88,26 +93,12 @@ class BuienwatchDataUpdateCoordinator(DataUpdateCoordinator[BuienwatchData]):
             raise UpdateFailed(f"{self.tracked_entity_id} has no known location")
 
         mode = self.data_source_mode
-        want_buienradar = mode in (DataSourceMode.BUIENRADAR, DataSourceMode.COMBINED)
-        want_buienalarm = mode in (DataSourceMode.BUIENALARM, DataSourceMode.COMBINED)
-
-        tasks = []
-        if want_buienradar:
-            tasks.append(async_fetch_buienradar(self._session, lat, lon))
-        if want_buienalarm:
-            tasks.append(async_fetch_buienalarm(self._session, lat, lon))
-
-        fetched = iter(await asyncio.gather(*tasks, return_exceptions=True))
-        buienradar_samples = self._unwrap(next(fetched), "Buienradar") if want_buienradar else None
-        buienalarm_samples = self._unwrap(next(fetched), "Buienalarm") if want_buienalarm else None
+        buienradar_samples, buienalarm_samples = await self._fetch_for_mode(mode, lat, lon)
 
         if buienradar_samples is None and buienalarm_samples is None:
-            attempted = " and ".join(
-                name
-                for want, name in ((want_buienradar, "Buienradar"), (want_buienalarm, "Buienalarm"))
-                if want
+            raise UpdateFailed(
+                f"No rain data available for {self.tracked_entity_id} (mode: {mode.value})"
             )
-            raise UpdateFailed(f"{attempted} unavailable for {self.tracked_entity_id}")
 
         combined = combine_samples(
             buienradar_samples, buienalarm_samples, now=dt_util.utcnow()
@@ -130,16 +121,73 @@ class BuienwatchDataUpdateCoordinator(DataUpdateCoordinator[BuienwatchData]):
             longitude=float(lon),
         )
 
-    def _unwrap(
-        self, result: list[RainSample] | BaseException, source_name: str
-    ) -> list[RainSample] | None:
-        """Return the sample list, or None if that source's fetch failed."""
-        if isinstance(result, BuienwatchApiError):
-            _LOGGER.warning("%s unavailable for %s: %s", source_name, self.tracked_entity_id, result)
-            return None
-        if isinstance(result, BaseException):
-            _LOGGER.exception(
-                "Unexpected error fetching %s for %s", source_name, self.tracked_entity_id, exc_info=result
+    async def _fetch_for_mode(
+        self, mode: DataSourceMode, lat: float, lon: float
+    ) -> tuple[list[RainSample] | None, list[RainSample] | None]:
+        """Fetch whichever source(s) ``mode`` calls for, applying fallback where relevant.
+
+        Always returns (buienradar_samples, buienalarm_samples), regardless of mode.
+        """
+        buienradar = (async_fetch_buienradar, "Buienradar")
+        buienalarm = (async_fetch_buienalarm, "Buienalarm")
+
+        if mode is DataSourceMode.BUIENRADAR:
+            return await self._safe_fetch(*buienradar, lat, lon), None
+        if mode is DataSourceMode.BUIENALARM:
+            return None, await self._safe_fetch(*buienalarm, lat, lon)
+        if mode is DataSourceMode.COMBINED:
+            # Both are wanted regardless of the other's outcome — fetch concurrently.
+            buienradar_samples, buienalarm_samples = await asyncio.gather(
+                self._safe_fetch(*buienradar, lat, lon),
+                self._safe_fetch(*buienalarm, lat, lon),
             )
+            return buienradar_samples, buienalarm_samples
+        if mode is DataSourceMode.BUIENRADAR_PRIMARY:
+            return await self._fetch_with_fallback(buienradar, buienalarm, lat, lon)
+        if mode is DataSourceMode.BUIENALARM_PRIMARY:
+            # The fallback only fires when the primary failed, so the two results
+            # are never both populated — swap back into (buienradar, buienalarm) order.
+            buienalarm_samples, buienradar_samples = await self._fetch_with_fallback(
+                buienalarm, buienradar, lat, lon
+            )
+            return buienradar_samples, buienalarm_samples
+        raise AssertionError(f"Unhandled data source mode: {mode}")  # pragma: no cover
+
+    async def _fetch_with_fallback(
+        self,
+        primary: tuple[_FetchFn, str],
+        fallback: tuple[_FetchFn, str],
+        lat: float,
+        lon: float,
+    ) -> tuple[list[RainSample] | None, list[RainSample] | None]:
+        """Try the primary source; only fetch the fallback if the primary failed.
+
+        Sequential, not concurrent — the fallback source is only queried when
+        actually needed, to avoid hitting it on every poll.
+        """
+        primary_fetch, primary_name = primary
+        fallback_fetch, fallback_name = fallback
+
+        primary_samples = await self._safe_fetch(primary_fetch, primary_name, lat, lon)
+        if primary_samples is not None:
+            return primary_samples, None
+
+        _LOGGER.debug(
+            "%s unavailable for %s, falling back to %s",
+            primary_name, self.tracked_entity_id, fallback_name,
+        )
+        fallback_samples = await self._safe_fetch(fallback_fetch, fallback_name, lat, lon)
+        return None, fallback_samples
+
+    async def _safe_fetch(
+        self, fetch: _FetchFn, source_name: str, lat: float, lon: float
+    ) -> list[RainSample] | None:
+        """Call an API fetch function, returning None (and logging) on any failure."""
+        try:
+            return await fetch(self._session, lat, lon)
+        except BuienwatchApiError as err:
+            _LOGGER.warning("%s unavailable for %s: %s", source_name, self.tracked_entity_id, err)
             return None
-        return result
+        except Exception:
+            _LOGGER.exception("Unexpected error fetching %s for %s", source_name, self.tracked_entity_id)
+            return None

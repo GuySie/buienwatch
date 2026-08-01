@@ -34,7 +34,9 @@
         "name": "Data Source",
         "state": {
           "buienradar": "Buienradar only",
+          "buienradar_primary": "Buienradar, fall back to Buienalarm",
           "buienalarm": "Buienalarm only",
+          "buienalarm_primary": "Buienalarm, fall back to Buienradar",
           "combined": "Combined (Buienradar + Buienalarm)"
         }
       }

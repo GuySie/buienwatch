@@ -54,7 +54,9 @@ class DataSourceMode(StrEnum):
     """Which upstream source(s) to use, selectable from the device page."""
 
     BUIENRADAR = "buienradar"
+    BUIENRADAR_PRIMARY = "buienradar_primary"
     BUIENALARM = "buienalarm"
+    BUIENALARM_PRIMARY = "buienalarm_primary"
     COMBINED = "combined"
 
 

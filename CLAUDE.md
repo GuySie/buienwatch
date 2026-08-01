@@ -60,7 +60,8 @@ graph, current/peak intensity, minutes-until-start/stop) and 2 diagnostic raw-sa
 by default (`EntityCategory.DIAGNOSTIC`, `entity_registry_enabled_default = False`), for anyone who wants to build
 custom templates against the raw per-source series (mirrors the old Node-RED `sensor.*.data` habit this
 integration replaces) — plus one `EntityCategory.CONFIG` select entity (`BuienwatchDataSourceSelect`) to choose
-Buienradar-only / Buienalarm-only / Combined right from the device page.
+the `DataSourceMode` right from the device page: Buienradar-only, Buienalarm-only, Combined, or one of two
+primary-with-fallback modes (try one source, only query the other if the first errors/is unavailable).
 
 **Options are applied live, never via reload.** Both `CONF_POLL_INTERVAL` and `CONF_DATA_SOURCE` live in
 `entry.options`, but neither change triggers `async_reload` (deliberately — a reload would flicker every entity
@@ -75,13 +76,21 @@ unavailable, which defeats the point of a device-page select for something meant
   poll. This mirrors the pattern in the sibling `ha-tuneshine` repo's `select.py` (source media player selection) —
   check that file if extending this further.
 
-**Per-source failure is not integration failure, but only within the selected mode.** `coordinator._async_update_data()`
-only fetches the source(s) implied by `data_source_mode` (skips the HTTP call entirely for a deselected source —
-both to reduce load on these unofficial/reverse-engineered APIs and because there's nothing to combine with in
-single-source mode) via `asyncio.gather(..., return_exceptions=True)`, and raises `UpdateFailed` only if *every
-fetched source* failed (or the tracked entity has no location). In Combined mode this means one source can be down
-and the other still serves data; in a single-source mode, that source failing has no fallback and fails the update
-— this is intentional, since picking a single source is an explicit opt-out of the other one.
+**Fetch strategy is mode-dependent** (`coordinator._fetch_for_mode()`), and only Combined mode fetches both sources
+unconditionally. `_safe_fetch()` wraps a single source's fetch and turns any `BuienwatchApiError`/unexpected
+exception into `None` (logged) rather than raising, so per-mode dispatch never needs its own try/except:
+- `BUIENRADAR` / `BUIENALARM` — fetch only that one source. No fallback: if it fails, the update fails.
+- `COMBINED` — fetch both concurrently via `asyncio.gather()` regardless of each other's outcome; one failing still
+  lets the other serve data.
+- `BUIENRADAR_PRIMARY` / `BUIENALARM_PRIMARY` — `_fetch_with_fallback()` fetches the primary first and *only*
+  fetches the secondary if the primary returned `None`, sequentially (not concurrently), specifically to avoid
+  hitting the non-primary source on every poll when the primary is healthy. `BUIENALARM_PRIMARY` calls
+  `_fetch_with_fallback(buienalarm, buienradar, ...)` and swaps the returned `(primary, fallback)` pair back into
+  `(buienradar, buienalarm)` order before returning — get this swap wrong and the samples end up attributed to the
+  wrong source's sensor/attributes.
+`_async_update_data()` raises `UpdateFailed` only when *both* `buienradar_samples` and `buienalarm_samples` end up
+`None` — which happens either because a single/fallback mode's only available source(s) all failed, or (Combined
+only) both sources failed independently.
 
 ## Known gaps (see git log / commit messages for context)
 

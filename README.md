@@ -27,9 +27,14 @@ Each configured tracker becomes its own device with:
   when not applicable.
 - Two diagnostic sensors (disabled by default) exposing the raw Buienradar
   and Buienalarm sample series, for building your own templates/automations.
-- **Data Source** — a select entity, right on the device page, to switch
-  between Buienradar only, Buienalarm only, or Combined. Takes effect
-  immediately (no reload), and only the selected source(s) are polled.
+- **Data Source** — a select entity, right on the device page, to choose:
+  - **Buienradar only** / **Buienalarm only** — poll a single source, no fallback.
+  - **Buienradar, fall back to Buienalarm** / **Buienalarm, fall back to Buienradar** —
+    poll one source; only query the other if the first one errors or is unavailable.
+  - **Combined** — poll both every time and take the worst-case value per time slot.
+
+  Switching takes effect immediately (no reload), and only the source(s) the
+  current mode actually needs get polled.
 
 ## Installation
 
