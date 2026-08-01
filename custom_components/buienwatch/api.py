@@ -10,6 +10,7 @@ import logging
 import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import aiohttp
 
@@ -18,6 +19,11 @@ from .const import BUIENALARM_URL, BUIENRADAR_URL, REQUEST_TIMEOUT_SECONDS
 _LOGGER = logging.getLogger(__name__)
 
 _TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
+
+# Buienradar's plain-text feed reports HH:MM in Dutch local time, regardless
+# of the timezone the Home Assistant host itself is configured with — pin it
+# explicitly rather than relying on the process's ambiguous system timezone.
+_BUIENRADAR_TZ = ZoneInfo("Europe/Amsterdam")
 
 
 @dataclass(frozen=True)
@@ -51,11 +57,13 @@ def _buienradar_code_to_mm_per_hour(code: int) -> float:
 
 
 def _resolve_buienradar_time(hour: int, minute: int, *, now: datetime) -> datetime:
-    """Resolve a bare HH:MM reading to a full datetime near ``now``.
+    """Resolve a bare HH:MM reading (Dutch local time) to a full datetime near ``now``.
 
-    Buienradar's plain-text feed carries no date, only a time-of-day. Readings
-    run forward from "now", so if a parsed time appears to be well in the past
-    relative to `now` it must actually be just after midnight the next day.
+    Buienradar's plain-text feed carries no date, only a time-of-day in
+    Europe/Amsterdam local time. ``now`` must already be in that timezone.
+    Readings run forward from "now", so if a parsed time appears to be well
+    in the past relative to `now` it must actually be just after midnight
+    the next day.
     """
     candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if candidate < now - timedelta(hours=1):
@@ -80,7 +88,7 @@ async def async_fetch_buienradar(
     except aiohttp.ClientError as err:
         raise BuienwatchConnectionError(f"Error contacting Buienradar: {err}") from err
 
-    now = datetime.now(timezone.utc).astimezone()
+    now = datetime.now(_BUIENRADAR_TZ)
     samples: list[RainSample] = []
     for line in text.splitlines():
         line = line.strip()
