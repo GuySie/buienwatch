@@ -116,32 +116,41 @@ Despite the "Dutch/Belgian" framing above, the two upstream APIs behave very dif
 ## Bar graph thresholds (BAR_THRESHOLDS, re-derived 2026-09-13)
 
 `BAR_THRESHOLDS` in `const.py` used to be evenly-spaced round numbers (0.1/0.5/1.0/1.5/2.0/3.5/5.0/10.0 mm/h),
-not derived from real data. A ~12h real-world capture of both sources at one location (see `reference/` —
-gitignored, a local-only stdlib poller + analysis script, not part of the published repo) found:
+not derived from real data or the encoding. A ~12h real-world capture of both sources at one location (see
+`reference/` — gitignored, a local-only stdlib poller + analysis script, not part of the published repo) led
+through two approaches before landing on the current one:
 
-- Buienradar's `10 ** ((code-109)/32)` conversion only produces a fixed ladder of ~40 distinct mm/h values in
-  practice, not a continuum, and two codes — 0.1000 and 0.2054 mm/h — dominate the low end, together accounting
-  for over a third of every non-dry reading observed.
-- The original 0.1–0.5 bucket lumped both of those dominant codes together with two more, so it absorbed ~60%
-  of all "raining" slots while the 1.0–1.5/1.5–2.0 buckets got only a handful of codes each — a steep,
-  front-loaded taper rather than a useful spread across the scale.
-- Naively re-deriving boundaries from data quantiles backfired: a boundary landing in the empty space *just
-  before* a dominant code cluster (rather than after it) starves the bucket on the low side.
+**Attempt 1 (rejected): fit boundaries to observed code frequency.** Buienradar's `10 ** ((code-109)/32)`
+conversion only produces a fixed ladder of ~40 distinct mm/h values in practice, not a continuum, and two codes
+— 0.1000 and 0.2054 mm/h — dominated the low end of the capture, together accounting for over a third of every
+non-dry reading. The original 0.1–0.5 bucket lumped both together with two more codes, absorbing ~60% of all
+"raining" slots while 1.0–1.5/1.5–2.0 got only a handful each. Boundaries were placed in the actual gaps
+*between* codes (never splitting a cluster) and chosen to balance bucket populations against that capture —
+but when the same 12h capture ran to completion (72 vs. the 59 polls analyzed mid-run), the boundaries no
+longer balanced well: a second rain pulse late in the window shifted where the mass actually was. This is
+overfitting in a narrow sense — not "wrong gaps" (those are fixed by the formula, not the sample), but "gaps
+chosen by weighting them against one session's code *frequency*," which is a real-world weather statistic that
+a single location/session can't reliably estimate.
 
-The fix, now live: boundaries placed in the actual gaps *between* Buienradar's discrete code values (never
-splitting a cluster), chosen to balance the resulting bucket populations — **0.1 / 0.25 / 0.35 / 0.75 / 2.0**
-(unchanged above 2.0 mm/h). This flattened the four rain buckets from a 24.0%/7.6%/7.0%/6.1% taper to a much
-more even 11.9%/5.3%/11.1%/16.4% spread over the capture window (same total rain-shown percentage, redistributed).
+**Attempt 2 (adopted): constant-ratio split, ignoring observed frequency entirely.** Since consecutive codes
+differ by a fixed ratio (`10 ** (1/32)` ≈ ×1.0746), the full 0.1–10.0 mm/h range was split into 7 buckets at a
+constant ratio of ×1.9307 each — i.e. every bucket is "roughly double the previous bucket's rain rate" — using
+only the fixed formula endpoints, not any sample's frequency. **Live thresholds: 0.1 / 0.20 / 0.37 / 0.72 / 1.4
+/ 2.7 / 5.2 / 10.0.** Each boundary was individually checked to confirm it still lands inside a gap between two
+consecutive Buienradar codes (so no cluster gets split), but *which* gap to use was chosen by the ratio alone,
+not by which gap had more/less data in this capture — so it can't be invalidated by more data the way Attempt 1
+was.
 
-Caveats, if picking this up again:
-- These boundaries are fit to *Buienradar's* code ladder specifically — in the combined per-slot data, Buienradar
-  wins the low buckets ~80-90% of the time, so they're really "a boundary drawn around Buienradar's quantization"
-  more than a source-agnostic property of rain intensity. A session where Buienalarm dominates the low end more
-  could divide differently.
-- The top of the scale (▆/▇/█/▓, ≥2.0 mm/h) is **unchanged and still unvalidated** — the capture only saw one
-  moderate rain event and never observed anything deep inside the ▓ overflow bucket (just one boundary-exact
-  10.0 mm/h reading). Re-running the `reference/` capture during an actual heavy/convective rain event would be
-  needed before touching those thresholds with any confidence.
+Known accepted tradeoff (not a bug): this leaves the 0.1–0.20 bucket (▂) thin. Cross-checked against both
+sources independently — including Buienalarm, whose `precipitationrate` is a continuous float with no code
+ladder to blame — genuinely few readings land in that narrow band specifically, so it's a real property of the
+underlying rain-rate distribution (very light rain doesn't linger there long), not a quantization artifact.
+Deliberately left as-is rather than nudging that one boundary to be more "usable."
+
+Still true regardless of which attempt: the top of the scale (▇/█/▓, ≥2.7 mm/h) remains thin in this capture —
+one moderate rain event, never anything deep inside the ▓ overflow bucket (just one boundary-exact 10.0 mm/h
+reading). Re-running the `reference/` capture during an actual heavy/convective rain event would be the way to
+gain confidence there, though the constant-ratio derivation itself doesn't depend on that the way Attempt 1 did.
 
 ## Known gaps (see git log / commit messages for context)
 

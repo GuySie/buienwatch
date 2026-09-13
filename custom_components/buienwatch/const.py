@@ -35,22 +35,29 @@ REQUEST_TIMEOUT_SECONDS = 10
 
 # Ascending (threshold_mm_per_hour, character) pairs — a slot maps to the
 # first character whose threshold it is strictly below. Values at/above the
-# final threshold map to BAR_MAX_CHAR. The 0.1-2.0 mm/h boundaries were
-# re-derived from a ~12h real-world capture of both sources at one location.
-# Buienradar's `10 ** ((code-109)/32)` conversion only produces a fixed
-# ladder of ~40 discrete mm/h values in practice, not a continuum, and two
-# of those codes (0.1000 and 0.2054 mm/h) dominate the low end — round-number
-# boundaries (0.5/1.0/1.5/2.0) lumped both into one bucket, so these instead
-# sit in the actual gaps between code values, chosen to balance the
-# resulting bucket populations rather than split any single code's cluster.
+# final threshold map to BAR_MAX_CHAR. The 0.1-10.0 mm/h boundaries are a
+# constant-ratio (~x1.93 per bucket) split of that range across the 7
+# non-dry buckets — i.e. each bucket is "roughly double the previous bucket's
+# rain rate" — rather than the arbitrary round numbers this replaced
+# (0.5/1.0/1.5/2.0/3.5/5.0, no consistent ratio between them). This is
+# derived purely from the fixed 0.1-10.0 endpoints, not from any observed
+# sample, so it can't be invalidated by more/different data the way a
+# frequency-fitted set of boundaries could be. Each boundary was individually
+# checked against Buienradar's `10 ** ((code-109)/32)` code ladder to confirm
+# it lands inside a gap between two consecutive codes (never splitting a
+# single code's cluster in two). One known tradeoff: this leaves the 0.1-0.20
+# bucket (▂) thin — cross-checked against both sources' real capture data,
+# genuinely few readings land in that narrow band specifically (not a
+# quantization artifact — Buienalarm's continuous values show the same
+# thinness), so it's a deliberate accepted tradeoff, not a bug.
 BAR_THRESHOLDS: tuple[tuple[float, str], ...] = (
     (0.1, "▁"),
-    (0.25, "▂"),
-    (0.35, "▃"),
-    (0.75, "▄"),
-    (2.0, "▅"),
-    (3.5, "▆"),
-    (5.0, "▇"),
+    (0.20, "▂"),
+    (0.37, "▃"),
+    (0.72, "▄"),
+    (1.4, "▅"),
+    (2.7, "▆"),
+    (5.2, "▇"),
     (10.0, "█"),
 )
 BAR_MAX_CHAR = "▓"
