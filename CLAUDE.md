@@ -113,6 +113,36 @@ Despite the "Dutch/Belgian" framing above, the two upstream APIs behave very dif
   returns numeric data worldwide, but `radar-world` results should be flagged as lower-confidence; Buienradar
   should keep being skipped there (no code change needed — it already fails gracefully via `_safe_fetch`).
 
+## Bar graph thresholds (BAR_THRESHOLDS, re-derived 2026-09-13)
+
+`BAR_THRESHOLDS` in `const.py` used to be evenly-spaced round numbers (0.1/0.5/1.0/1.5/2.0/3.5/5.0/10.0 mm/h),
+not derived from real data. A ~12h real-world capture of both sources at one location (see `reference/` —
+gitignored, a local-only stdlib poller + analysis script, not part of the published repo) found:
+
+- Buienradar's `10 ** ((code-109)/32)` conversion only produces a fixed ladder of ~40 distinct mm/h values in
+  practice, not a continuum, and two codes — 0.1000 and 0.2054 mm/h — dominate the low end, together accounting
+  for over a third of every non-dry reading observed.
+- The original 0.1–0.5 bucket lumped both of those dominant codes together with two more, so it absorbed ~60%
+  of all "raining" slots while the 1.0–1.5/1.5–2.0 buckets got only a handful of codes each — a steep,
+  front-loaded taper rather than a useful spread across the scale.
+- Naively re-deriving boundaries from data quantiles backfired: a boundary landing in the empty space *just
+  before* a dominant code cluster (rather than after it) starves the bucket on the low side.
+
+The fix, now live: boundaries placed in the actual gaps *between* Buienradar's discrete code values (never
+splitting a cluster), chosen to balance the resulting bucket populations — **0.1 / 0.25 / 0.35 / 0.75 / 2.0**
+(unchanged above 2.0 mm/h). This flattened the four rain buckets from a 24.0%/7.6%/7.0%/6.1% taper to a much
+more even 11.9%/5.3%/11.1%/16.4% spread over the capture window (same total rain-shown percentage, redistributed).
+
+Caveats, if picking this up again:
+- These boundaries are fit to *Buienradar's* code ladder specifically — in the combined per-slot data, Buienradar
+  wins the low buckets ~80-90% of the time, so they're really "a boundary drawn around Buienradar's quantization"
+  more than a source-agnostic property of rain intensity. A session where Buienalarm dominates the low end more
+  could divide differently.
+- The top of the scale (▆/▇/█/▓, ≥2.0 mm/h) is **unchanged and still unvalidated** — the capture only saw one
+  moderate rain event and never observed anything deep inside the ▓ overflow bucket (just one boundary-exact
+  10.0 mm/h reading). Re-running the `reference/` capture during an actual heavy/convective rain event would be
+  needed before touching those thresholds with any confidence.
+
 ## Known gaps (see git log / commit messages for context)
 
 - HACS validation (`validate-hacs.yml`) currently fails on the "brands" check — `buienwatch` isn't registered in
